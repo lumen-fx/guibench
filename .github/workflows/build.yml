@@ -7,8 +7,8 @@
 # committed results.json. Each framework is its own matrix job; fail-fast is
 # off so one framework breaking or missing does not hide the others.
 #
-# The lumen job builds lumenc from the framework repo; the benchmark apps
-# themselves are .lmn markup with nothing to compile.
+# The lumen job builds lumenc from the framework repo and checks the apps that
+# live there; they are .lmn markup with nothing to compile.
 
 name: build
 
@@ -87,8 +87,8 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      # Lumen: build lumenc from the framework repo. The benchmark apps are
-      # .lmn markup and compile inside lumenc at run time.
+      # Lumen: build lumenc from the framework repo. The benchmark apps live
+      # there too, as .lmn markup that compiles inside lumenc at run time.
       - name: Check out the Lumen framework repository
         if: matrix.kind == 'lumen'
         uses: actions/checkout@v4
@@ -120,6 +120,18 @@ jobs:
         if: matrix.kind == 'lumen'
         working-directory: lumen-framework
         run: cargo build -p lumenc
+
+      - name: Check the Lumen apps
+        if: matrix.kind == 'lumen'
+        working-directory: lumen-framework
+        run: |
+          if [ ! -d benches/guibench ]; then
+            echo "::error::lumen-fx/lumen has no benches/guibench; the Lumen apps live there"
+            exit 1
+          fi
+          for app in benches/guibench/*/; do
+            target/debug/lumenc check "$app"
+          done
 
       # System packages per framework.
       - name: Install Tauri system dependencies

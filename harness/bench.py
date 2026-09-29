@@ -102,13 +102,17 @@ CARGO_TARGET = os.environ.get("BENCH_CARGO_TARGET_DIR",
 # Path to the Lumen framework checkout. If it is absent, the lumen rows
 # are skipped with a note instead of failing the run. Override LUMEN_REPO.
 LUMEN_REPO = Path(os.environ.get("LUMEN_REPO", str(ROOT.parent / "Lumen")))
+# The Lumen apps live in the Lumen repo. The build copies them here and
+# fills the textview corpus into the copy, so the checkout is never written.
+LUMEN_APPS_SRC = LUMEN_REPO / "benches" / "guibench"
+LUMEN_APPS = OUT / "lumen-apps"
 # Flutter builds into flutter/build (gitignored); Tauri builds into its
 # own target dir (BENCH_TAURI_TARGET_DIR), off the shared cargo target.
 FLUTTER_BUNDLE = (ROOT / "flutter" / "build" / "linux" / "x64" / "release"
                   / "bundle")
 TAURI_TARGET = Path(os.environ.get("BENCH_TAURI_TARGET_DIR",
                                    str(OUT / "tauri-target")))
-# Must match lumen/*/lumen.toml [mcp].port. Not 7878; other lumenc
+# Must match the Lumen apps' lumen.toml [mcp].port. Not 7878; other lumenc
 # instances (dev tooling) commonly hold the default port.
 LUMEN_MCP_PORT = 7941
 
@@ -317,9 +321,9 @@ FRAMEWORKS = ("lumen", "slint", "egui", "iced", "qt-widgets", "qt-quick",
 
 
 def lumen_available():
-    """True when the Lumen framework checkout is present (its Cargo.toml
-    exists). When absent, the lumen rows are skipped with a note."""
-    return (LUMEN_REPO / "Cargo.toml").is_file()
+    """True when the Lumen framework checkout is present and carries the
+    bench apps. When absent, the lumen rows are skipped with a note."""
+    return (LUMEN_REPO / "Cargo.toml").is_file() and LUMEN_APPS_SRC.is_dir()
 
 
 def log(msg):
@@ -578,9 +582,9 @@ def _sizes_for(fw):
         subprocess.run(["strip", str(dst)], check=True)
         s["runtime_stripped_bytes"] = dst.stat().st_size
         for app in APPS:
-            d = ROOT / "lumen" / app
+            d = LUMEN_APPS / app
             s[app] = {"app_payload_bytes": sum(
-                f.stat().st_size for f in d.iterdir() if f.is_file())}
+                f.stat().st_size for f in d.rglob("*") if f.is_file())}
         return s
     if fw == "flutter":
         # One shared runner ELF + libapp.so (all four apps compile into the
@@ -600,6 +604,11 @@ def _sizes_for(fw):
 def build_all():
     BIN_OUT.mkdir(parents=True, exist_ok=True)
     _preflight()
+
+    # Fresh copy of the Lumen apps, before the corpus fills textview.
+    if lumen_available():
+        shutil.rmtree(LUMEN_APPS, ignore_errors=True)
+        shutil.copytree(LUMEN_APPS_SRC, LUMEN_APPS)
 
     # Deterministic corpus + generated Lumen textview markup.
     run_checked([sys.executable, str(ROOT / "harness" / "gen_corpus.py")])
@@ -630,7 +639,7 @@ def build_all():
             env=cargo_env())
         for app in APPS:
             run_checked([str(fw_bin("lumen", "x")), "check",
-                         str(ROOT / "lumen" / app)])
+                         str(LUMEN_APPS / app)])
     stage("lumen", _build_lumen)
 
     for name in ("slint", "egui", "iced"):
@@ -895,7 +904,7 @@ def spawn(fw_name, app, mode_args, display, extra_env=None):
         # compositor, same as the other five. Window size comes from the
         # app's lumen.toml [window] (800x600). No --headless (that path
         # renders offscreen with no compositor and no vsync).
-        cmd = [str(fw_bin("lumen", app)), "run", str(ROOT / "lumen" / app)]
+        cmd = [str(fw_bin("lumen", app)), "run", str(LUMEN_APPS / app)]
     else:
         cmd = [str(fw_bin(fw_name, app))] + mode_args
     env = display.app_env(fw_name)
@@ -976,7 +985,7 @@ def evict_page_cache(fw_name, app):
     files of other processes stay warm. Labeled 'partial cold'."""
     files = [fw_bin(fw_name, app), CORPUS]
     if fw_name == "lumen":
-        files += list((ROOT / "lumen" / app).iterdir())
+        files += [f for f in (LUMEN_APPS / app).rglob("*") if f.is_file()]
     ldd = _cmd_out(["ldd", str(fw_bin(fw_name, app))]) or ""
     for line in ldd.splitlines():
         parts = line.split()
