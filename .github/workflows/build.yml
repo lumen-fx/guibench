@@ -125,6 +125,10 @@ jobs:
         if: matrix.kind == 'lumen'
         working-directory: lumen-framework
         run: |
+          if [ ! -d benches/guibench ]; then
+            echo "::error::lumen-fx/lumen has no benches/guibench; the Lumen apps live there"
+            exit 1
+          fi
           for app in benches/guibench/*/; do
             target/debug/lumenc check "$app"
           done
