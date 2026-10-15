@@ -1,4 +1,4 @@
-# lumen-benchmarks
+# guibench
 
 The same GUI app implemented in nine frameworks and measured the same
 way, so the numbers compare like with like. The app, the workloads, and
@@ -7,7 +7,7 @@ differences that remain are listed as caveats in `results.md`.
 
 | dir | framework | notes |
 |---|---|---|
-| `lumen/` | Lumen (`.lmn` + CSS + Rhai) | run by `lumenc` from the Lumen repo |
+| Lumen repo, `benches/guibench/` | Lumen (`.lmn` + CSS + Rhai) | built and run by `lumenc` from a Lumen checkout |
 | `slint/` | Slint 1.x, winit backend | `ListView` (virtualized) |
 | `egui/` | eframe (latest) | `ScrollArea::show_rows` (virtualized) |
 | `iced/` | iced 0.13 | plain `Column` in `scrollable` (iced has no virtualized list) |
@@ -106,7 +106,7 @@ framework's rows rather than failing the run.
 
 | framework | needs |
 |---|---|
-| lumen | a Lumen framework checkout (see `LUMEN_REPO` below) and its Rust toolchain |
+| lumen | a Lumen framework checkout (see `LUMEN_REPO` below), which holds the Lumen apps, and its Rust toolchain |
 | slint / egui / iced | rustc + cargo |
 | qt-widgets | CMake and Qt6 Widgets dev (`qmake6`, `Qt6WidgetsConfig`) |
 | qt-quick | CMake and Qt6 Quick dev (`Qt6QuickConfig`, `Qt6QuickControls2Config`), plus the QtQuick.Controls Basic style QML module at run time |
@@ -166,8 +166,10 @@ python3 harness/test_stats.py
 The suite reads these environment variables:
 
 * `LUMEN_REPO`: path to a Lumen framework checkout
-  (`git clone https://github.com/lumen-fx/lumen`). If it is absent, the
-  lumen rows are skipped with a note. Default: a `Lumen` directory
+  (`git clone https://github.com/lumen-fx/lumen`). The Lumen apps live
+  in its `benches/guibench`; the build copies them under `harness/out`
+  and never writes to the checkout. If it is absent, the lumen rows are
+  skipped with a note. Default: a `Lumen` directory
   beside this repo.
 * `BENCH_CARGO_TARGET_DIR`: cargo target dir for the Rust builds. Kept
   separate from any `CARGO_TARGET_DIR` your shell exports so a shared
